@@ -2,6 +2,7 @@ from __future__ import division
 import argparse
 
 from PIL import Image
+from PIL import ImageEnhance
 import numpy as np
 import gym
 
@@ -25,6 +26,8 @@ WINDOW_LENGTH = 4
 NUM_ACTIONS = 6
 
 class AirSimProcessor(Processor):
+
+
     def process_observation(self, observation):
         img1d = np.array(observation[0].image_data_float)
         print(len(observation[0].image_data_float),observation[0].height,observation[0].width)
@@ -32,6 +35,8 @@ class AirSimProcessor(Processor):
         assert img2d.ndim == 2 # (height, width)
         img = Image.fromarray(img2d)
         img = img.resize(INPUT_SHAPE).convert('L')  # resize and convert to grayscale
+        img = ImageEnhance.Brightness(img).enhance(10.0)
+        img = ImageEnhance.Contrast(img).enhance(2.0)
         processed_observation = np.array(img)
         assert processed_observation.shape == INPUT_SHAPE
         return processed_observation.astype('uint8')  # saves storage in experience memory
@@ -94,7 +99,7 @@ processor = AirSimProcessor()
 # (low eps). We also set a dedicated eps value that is used during testing. Note that we set it to 0.05
 # so that the agent still performs some random actions. This ensures that the agent cannot get stuck.
 policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1.0, value_min=.1, value_test=.05,
-                              nb_steps=90000)
+                              nb_steps=150000)
 
 # The trade-off between exploration and exploitation is difficult and an on-going research topic.
 # If you want, you can experiment with the parameters or use a different policy. Another popular one
@@ -103,7 +108,7 @@ policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1.0, val
 # Feel free to give it a try!
 
 dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory,
-               processor=processor, nb_steps_warmup=1000, gamma=.99, target_model_update=5000,
+               processor=processor, nb_steps_warmup=10000, gamma=.99, target_model_update=10000,
                train_interval=4, delta_clip=1.)
 dqn.compile(Adam(lr=.00025), metrics=['mae'])
 
@@ -113,15 +118,15 @@ if args.mode == 'train':
     weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
     checkpoint_weights_filename = 'dqn_' + args.env_name + '_weights_{step}.h5f'
     log_filename = 'dqn_{}_log.json'.format(args.env_name)
-    callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=2000)]
+    callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=10000)]
     callbacks += [FileLogger(log_filename, interval=100)]
     
-    #dqn.load_weights(weights_filename)
-    dqn.fit(env, callbacks=callbacks, nb_steps=100000, log_interval=5000)
+    #dqn.load_weights('dqn_BreakoutDeterministic-v4_weights_56000.h5f')
+    dqn.fit(env, callbacks=callbacks, nb_steps=200000, log_interval=5000)
 
     # After training is done, we save the final weights one more time.
-    dqn.save_weights(weights_filename, overwrite=True)
-
+    #dqn.save_weights(weights_filename, overwrite=True)
+    #dqn.load_weights('dqn_BreakoutDeterministic-v4_weights_56000.h5f')
     # Finally, evaluate our algorithm for 10 episodes.
     dqn.test(env, nb_episodes=10, visualize=False)
 elif args.mode == 'test':
