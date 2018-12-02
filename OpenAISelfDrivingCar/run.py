@@ -13,6 +13,8 @@ from baselines.common.tf_util import get_session
 from baselines import logger
 from importlib import import_module
 
+from car_environment import CarEnvironment
+
 from baselines.common.vec_env.vec_normalize import VecNormalize
 
 try:
@@ -29,27 +31,6 @@ try:
     import roboschool
 except ImportError:
     roboschool = None
-
-_game_envs = defaultdict(set)
-for env in gym.envs.registry.all():
-    # TODO: solve this with regexes
-    env_type = env._entry_point.split(':')[0].split('.')[-1]
-    _game_envs[env_type].add(env.id)
-
-# reading benchmark names directly from retro requires
-# importing retro here, and for some reason that crashes tensorflow
-# in ubuntu
-_game_envs['retro'] = {
-    'BubbleBobble-Nes',
-    'SuperMarioBros-Nes',
-    'TwinBee3PokoPokoDaimaou-Nes',
-    'SpaceHarrier-Nes',
-    'SonicTheHedgehog-Genesis',
-    'Vectorman-Genesis',
-    'FinalFight-Snes',
-    'SpaceInvaders-Snes',
-}
-
 
 def train(args, extra_args):
 
@@ -71,7 +52,7 @@ def train(args, extra_args):
         if alg_kwargs.get('network') is None:
             alg_kwargs['network'] = get_default_network(env_type)
 
-    print('Training {} on {}:{} with arguments \n{}'.format(args.alg, env_type, env_id, alg_kwargs))
+    print('Training {} on {} with arguments \n{}'.format(args.alg, env_type, alg_kwargs))
 
     model = learn(
         env=env,
@@ -96,28 +77,22 @@ def build_env(args):
     config.gpu_options.allow_growth = True
     get_session(config=config)
 
-    env = make_vec_env(env_id, env_type, args.num_env or 1, seed, reward_scale=args.reward_scale)
 
-    if env_type == 'mujoco':
-        env = VecNormalize(env)
+    env = CarEnvironment()
 
     return env
 
 
 def get_default_network(env_type):
-    if env_type in {'atari', 'retro'}:
+    if env_type in {'atari', 'retro','car-environment'}:
         return 'cnn'
     else:
         return 'mlp'
 
 def get_alg_module(alg, submodule=None):
     submodule = submodule or alg
-    try:
-        # first try to import the alg module from baselines
-        alg_module = import_module('.'.join(['baselines', alg, submodule]))
-    except ImportError:
-        # then from rl_algs
-
+    # first try to import the alg module from baselines
+    alg_module = import_module('.'.join([ alg, submodule]))
     return alg_module
 
 
